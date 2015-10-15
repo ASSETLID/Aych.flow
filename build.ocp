@@ -21,7 +21,7 @@ begin library "hh-embedded"
     "hack/hhi/hhi_win32res_stubs.c"
     "hack/hhi/hhi_win32res.ml"
   ]
-  requires = [ "bigarray" "hh-utils" "hh-globals" ]
+  requires = [ "bigarray" "hh-utils" "hh-globals" "hh-find" ]
 end
 
 (* This library is used to extract the archive embedded in the Elf binary.
