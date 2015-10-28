@@ -11,3 +11,4 @@ npm-debug.log
 *.swp
 flowlib.rc
 lib/INDEX
+slave_*.log
