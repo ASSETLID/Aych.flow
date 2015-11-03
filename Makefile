@@ -76,6 +76,7 @@ NATIVE_OBJECT_FILES=\
   hack/utils/realpath.o\
   hack/utils/sysinfo.o\
   hack/utils/priorities.o\
+  hack/utils/win32_support.o\
   src/embedded/flowlib_elf.o
 
 OCAML_LIBRARIES=\
@@ -117,7 +118,7 @@ build-flow: build-flow-native-deps $(FLOWLIB)
 
 build-flow-with-ocp: build-flow-stubs-with-ocp
 	[ -d _obuild ] || ocp-build init
-	ocp-build build
+	ocp-build build flow
 
 build-flow-debug: build-flow-native-deps $(FLOWLIB)
 	ocamlbuild -lflags -custom -no-links $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/flow.d.byte
