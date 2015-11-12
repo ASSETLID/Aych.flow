@@ -737,7 +737,7 @@ let fullpath root =
 
 let read root =
   let filename = fullpath root in
-  let lines = cat_no_fail filename |> split_lines in
+  let lines = cat_no_fail filename |> Str.split @@ Str.regexp "\r?\n" in
   let config = empty_config root in
   let lines = List.mapi (fun i line -> (i+1, String.trim line)) lines in
   parse config lines
