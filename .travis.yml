@@ -23,12 +23,3 @@ addons:
   apt:
     packages:
     - libelf-dev
-
-notifications:
-  email:
-    recipients:
-      - flowtype@fb.com
-  irc:
-    channels:
-      - "chat.freenode.net#flowtype"
-    on_success: change
