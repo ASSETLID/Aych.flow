@@ -203,7 +203,7 @@ runtest() {
             trap - SIGINT SIGTERM
         fi
         diff_file="${name}.diff"
-        diff -u "$exp_file" "$out_file" > "$diff_file"
+        diff -u --strip-trailing-cr "$exp_file" "$out_file" > "$diff_file"
         if [ -s "$diff_file" ]
         then
             return_status=$RUNTEST_FAILURE

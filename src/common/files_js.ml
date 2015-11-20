@@ -282,4 +282,4 @@ let relative_path =
   in
   fun root file ->
     make_relative (split_path root, split_path file)
-    |> String.concat Filename.dir_sep
+    |> String.concat "/"
