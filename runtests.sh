@@ -1,4 +1,5 @@
 #!/bin/bash
+
 if [[ "$OSTYPE" == "darwin"* ]]; then
   _canonicalize_file_path() {
     local dir file
@@ -93,7 +94,13 @@ runtest() {
     cd "$dir" || exit 1
     name=${dir##*/}
     exp_file="${name}.exp"
-    if [[ -z $filter || $name =~ $filter ]]
+    # On Windows we skip some tests as symlinks not available
+    if [ "$OSTYPE" = "msys" ]  &&
+      ([ $name = "symlink" ] ||
+       [ $name = "node_tests" ])
+    then
+        return $RUNTEST_SKIP
+    elif [[ -z $filter || $name =~ $filter ]]
     then
         if ([ ! -e "$exp_file" ] || [ ! -e ".flowconfig" ])
         then
