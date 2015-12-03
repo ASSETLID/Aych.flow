@@ -92,19 +92,20 @@ end
 module Program =
   struct
     let preinit () =
+      (* Warning: Global references inited in this function, should
+         be 'restored' in the workers, because they are not 'forked'
+         anymore. See `ServerWorker.{save/restore}_state`. *)
       HackSearchService.attach_hooks ();
       (* Force hhi files to be extracted and their location saved before workers
        * fork, so everyone can know about the same hhi path. *)
       ignore (Hhi.get_hhi_root());
-      if not Sys.win32 then
-        (Sys.set_signal Sys.sigusr1
-          (Sys.Signal_handle Typing.debug_print_last_pos);
-        Sys.set_signal Sys.sigusr2
-          (Sys.Signal_handle (fun _ -> (
-            Hh_logger.log "Got sigusr2 signal. Going to shut down.";
-            Exit_status.exit Exit_status.Server_shutting_down
-          )));
-        )
+      Sys_utils.set_signal Sys.sigusr1
+        (Sys.Signal_handle Typing.debug_print_last_pos);
+      Sys_utils.set_signal Sys.sigusr2
+        (Sys.Signal_handle (fun _ -> (
+             Hh_logger.log "Got sigusr2 signal. Going to shut down.";
+             Exit_status.exit Exit_status.Server_shutting_down
+           )))
 
     let run_once_and_exit genv env =
       ServerError.print_errorl
@@ -112,9 +113,11 @@ module Program =
         (List.map env.errorl Errors.to_absolute) stdout;
       match ServerArgs.convert genv.options with
       | None ->
+         Worker.killall ();
          exit (if env.errorl = [] then 0 else 1)
       | Some dirname ->
          ServerConvert.go genv env dirname;
+         Worker.killall ();
          exit 0
 
     (* filter and relativize updated file paths *)
@@ -326,18 +329,17 @@ let load genv filename to_recheck =
 let run_load_script genv cmd =
   try
     let t = Unix.gettimeofday () in
-    let cmd =
+    let str_cmd =
       sprintf
         "%s %s %s"
         (Filename.quote (Path.to_string cmd))
         (Filename.quote (Path.to_string (ServerArgs.root genv.options)))
         (Filename.quote Build_id.build_id_ohai) in
-    Hh_logger.log "Running load script: %s\n%!" cmd;
+    Hh_logger.log "Running load script: %s\n%!" str_cmd;
     let state_fn, to_recheck =
-      let do_fn () =
-        let ic = Unix.open_process_in cmd in
+      let reader timeout ic _oc =
         let state_fn =
-          try input_line ic
+          try Timeout.input_line ~timeout ic
           with End_of_file -> raise State_not_found
         in
         if state_fn = "DISABLED" then raise Load_state_disabled;
@@ -345,18 +347,19 @@ let run_load_script genv cmd =
         begin
           try
             while true do
-              to_recheck := input_line ic :: !to_recheck
+              to_recheck := Timeout.input_line ~timeout ic :: !to_recheck
             done
           with End_of_file -> ()
         end;
-        assert (Unix.close_process_in ic = Unix.WEXITED 0);
+        let rc = Timeout.close_process_in ic in
+        assert (rc = Unix.WEXITED 0);
         state_fn, !to_recheck
       in
-      with_timeout
-        (ServerConfig.load_script_timeout genv.config)
+      Timeout.read_process
+        ~timeout:(ServerConfig.load_script_timeout genv.config)
         ~on_timeout:(fun _ -> failwith "Load script timed out")
-        ~do_:do_fn
-    in
+        ~reader
+        (Path.to_string cmd) [| |] in
     Hh_logger.log
       "Load state found at %s. %d files to recheck\n%!"
       state_fn (List.length to_recheck);
@@ -418,7 +421,7 @@ let program_init genv =
   env
 
 let save_complete env fn =
-  let chan = open_out_no_fail fn in
+  let chan = open_out_bin_no_fail fn in
   Marshal.to_channel chan env [];
   Program.marshal chan;
   close_out_no_fail fn chan;
@@ -441,14 +444,14 @@ let save _genv env (kind, fn) =
  * The server monitor will pass client connections to this process
  * via in_fd.
  *)
-let daemon_main options in_fd out_fd =
+let typechecker_main_exn options in_fd out_fd =
   (** If the client started the server, it opened an FD before forking,
    * so it can be notified when the server is ready. The FD number was
    * passed in program args. *)
   let waiting_channel =
     Option.map
       (ServerArgs.waiting_client options)
-      ~f:Handle.to_out_channel in
+      ~f:Unix.out_channel_of_descr in
   let root = ServerArgs.root options in
   (* The OCaml default is 500, but we care about minimizing the memory
    * overhead *)
@@ -463,19 +466,20 @@ let daemon_main options in_fd out_fd =
   else HackEventLogger.init root (Unix.gettimeofday ());
   Option.iter
     (ServerArgs.waiting_client options)
-    ~f:(fun handle ->
-        let fd = Handle.wrap_handle handle in
-        Unix.set_close_on_exec fd);
+    ~f:Unix.set_close_on_exec;
   Program.preinit ();
   Sys_utils.set_priorities ~cpu_priority ~io_priority;
-  SharedMem.init (ServerConfig.sharedmem_config config);
+  let handle =
+    SharedMem.init
+      (ServerConfig.sharedmem_config config)
+      local_config.ServerLocalConfig.shm_dir in
   (* this is to transform SIGPIPE in an exception. A SIGPIPE can happen when
    * someone C-c the client.
    *)
-  if not Sys.win32 then Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
+  Sys_utils.set_signal Sys.sigpipe Sys.Signal_ignore;
   PidLog.init (ServerFiles.pids_file root);
   PidLog.log ~reason:"main" (Unix.getpid());
-  let genv = ServerEnvBuild.make_genv options config local_config in
+  let genv = ServerEnvBuild.make_genv options config local_config handle in
   let is_check_mode = ServerArgs.check_mode genv.options in
   if is_check_mode then
     let env = program_init genv in
@@ -486,3 +490,17 @@ let daemon_main options in_fd out_fd =
     let env = MainInit.go options waiting_channel
       (fun () -> program_init genv) in
     serve genv env in_fd out_fd
+
+let typechecker_main options in_fd out_fd =
+  try typechecker_main_exn options in_fd out_fd
+  with SharedMem.Out_of_shared_memory ->
+    Printf.eprintf "Error: failed to allocate in the shared heap.\n%!";
+    Exit_status.(exit Out_of_shared_memory)
+
+let typechecker_entry =
+  Daemon.register_entry_point
+    "main"
+    (fun options (ic, oc) ->
+      let in_fd = Daemon.descr_of_in_channel ic in
+      let out_fd = Daemon.descr_of_out_channel oc in
+      typechecker_main options in_fd out_fd)

@@ -55,7 +55,8 @@ let make_next_files genv : Relative_path.t MultiWorker.nextlist =
   let hhi_root = Hhi.get_hhi_root () in
   let next_files_hhi = compose
     (List.map ~f:(Relative_path.(create Hhi)))
-    (Find.make_next_files ~name:"hhi" FindUtils.is_php hhi_root) in
+    (Find.make_next_files
+       ~name:"hhi" ~filter:FindUtils.is_php hhi_root) in
   fun () ->
     match next_files_hhi () with
     | [] -> next_files_root ()
@@ -113,15 +114,15 @@ let mk_state_future timeout root cmd =
     Daemon.fork ~log_file (load_state root cmd) in
   fun () ->
     Result.join @@ Result.try_with @@ fun () ->
-    Sys_utils.with_timeout timeout
+    Timeout.with_timeout ~timeout
       ~on_timeout:(fun _ ->
         (* Do a best-effort attempt to kill the daemon, since we no longer
          * need its result. The call may fail if e.g. the daemon exited just
          * after the timeout but before the kill signal goes through *)
         (try Daemon.kill daemon with e -> Hh_logger.exc e);
         raise Loader_timeout)
-      ~do_:begin fun () ->
-        Daemon.from_channel ic
+      ~do_:begin fun t ->
+        Daemon.from_channel ~timeout:t ic
         >>| fun (fn, dirty_files, end_time) ->
         HackEventLogger.load_mini_worker_end start_time end_time;
         let time_taken = end_time -. start_time in

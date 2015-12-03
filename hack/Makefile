@@ -2,7 +2,7 @@
 #                            Variables to override                             #
 ################################################################################
 
-EXTRA_INCLUDE_PATHS=
+EXTRA_INCLUDE_PATHS=utils
 EXTRA_LIB_PATHS=
 EXTRA_CC_FLAGS=
 
@@ -65,6 +65,9 @@ MODULES=\
   $(FSNOTIFY)\
   $(INOTIFY)
 
+LOCAL_HEADER_FILES=\
+  utils/handle.h
+
 NATIVE_OBJECT_FILES=\
   heap/hh_shared.o\
   hhi/hhi_elf.o\
@@ -80,6 +83,7 @@ NATIVE_OBJECT_FILES=\
   utils/priorities.o\
   utils/realpath.o\
   utils/sysinfo.o\
+  utils/win32_support.o\
   $(INOTIFY)/$(notdir $(INOTIFY))_stubs.o
 
 OCAML_LIBRARIES=\
@@ -89,6 +93,7 @@ OCAML_LIBRARIES=\
 
 NATIVE_LIBRARIES=\
   pthread\
+  rt\
   $(ELF)
 
 TARGETS=_build/hh_server.native _build/hh_client.native \
@@ -154,7 +159,7 @@ $(TARGETS): $(ALL_SRC_FILES)
 	touch $(TARGETS)
 
 build-hack-native-deps: build-hack-stubs
-	ocamlbuild -cflags "-g $(EXTRA_INCLUDE_OPTS) $(EXTRA_CC_OPTS)" $(NATIVE_OBJECT_FILES)
+	ocamlbuild -cflags "-g $(EXTRA_INCLUDE_OPTS) $(EXTRA_CC_OPTS)" $(LOCAL_HEADER_FILES) $(NATIVE_OBJECT_FILES)
 
 # If you modify this rule, do not forget to edit the file
 # `$(ROOT)/scripts/gen_build_id.ml` used on Windows.
@@ -249,4 +254,4 @@ do-test:
 	python3 ../test/verify.py --program ../bin/hh_patch_module_test_driver ../test/hh_matcher/patcher_module_tests
 	python3 ../test/verify.py --program ../bin/hh_patch_api_test_driver ../test/hh_matcher/patcher_api_tests
 	python3 ../test/verify.py --program ../bin/hh_patch_test_driver ../test/hh_matcher/patcher_tests
-	python3 ../test/integration/runner.py ../bin/hh_server ../bin/hh_client
+#	python3 ../test/integration/runner.py ../bin/hh_server ../bin/hh_client

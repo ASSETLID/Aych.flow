@@ -43,7 +43,7 @@ let open_in_bin_no_fail fn =
   try open_in_bin fn
   with e ->
     let e = Printexc.to_string e in
-    Printf.fprintf stderr "Could not open_in: '%s' (%s)\n" fn e;
+    Printf.fprintf stderr "Could not open_in_bin: '%s' (%s)\n" fn e;
     exit 3
 
 let close_in_no_fail fn ic =
@@ -57,6 +57,13 @@ let open_out_no_fail fn =
   with e ->
     let e = Printexc.to_string e in
     Printf.fprintf stderr "Could not open_out: '%s' (%s)\n" fn e;
+    exit 3
+
+let open_out_bin_no_fail fn =
+  try open_out_bin fn
+  with e ->
+    let e = Printexc.to_string e in
+    Printf.fprintf stderr "Could not open_out_bin: '%s' (%s)\n" fn e;
     exit 3
 
 let close_out_no_fail fn oc =
@@ -138,24 +145,6 @@ let with_umask umask f =
     ~do_:f
 let with_umask umask f =
   if Sys.win32 then f () else with_umask umask f
-
-let with_timeout timeout ~on_timeout ~do_ =
-  let old_handler = ref Sys.Signal_default in
-  let old_timeout = ref 0 in
-  Utils.with_context
-    ~enter:(fun () ->
-        old_handler := Sys.signal Sys.sigalrm (Sys.Signal_handle on_timeout);
-        old_timeout := Unix.alarm timeout)
-    ~exit:(fun () ->
-        ignore (Unix.alarm !old_timeout);
-        Sys.set_signal Sys.sigalrm !old_handler)
-    ~do_
-
-let with_timeout timeout ~on_timeout ~do_ =
-  if Sys.win32 then
-    do_ () (* TODO *)
-  else
-    with_timeout timeout ~on_timeout ~do_
 
 let read_stdin_to_string () =
   let buf = Buffer.create 4096 in
@@ -333,6 +322,10 @@ let setsid =
   if Sys.win32 then Unix.getpid else Unix.setsid
 
 let set_signal = if not Sys.win32 then Sys.set_signal else (fun _ _ -> ())
+let signal =
+  if not Sys.win32
+  then (fun a b -> ignore (Sys.signal a b))
+  else (fun _ _ -> ())
 
 external get_total_ram : unit -> int = "hh_sysinfo_totalram"
 external uptime : unit -> int = "hh_sysinfo_uptime"
@@ -343,3 +336,28 @@ let nbr_procs = nproc ()
 
 external set_priorities : cpu_priority:int -> io_priority:int -> unit =
   "hh_set_priorities"
+
+external win_terminate_process: int -> bool = "win_terminate_process"
+
+let terminate_process pid =
+  try Unix.kill pid Sys.sigkill
+  with exn when Sys.win32 ->
+    (* Can be removed once support for ocaml-4.01 is dropped *)
+    if not (win_terminate_process pid) then
+      raise Unix.(Unix_error(ESRCH, "kill", ""))
+
+let lstat path =
+  (* WTF, on Windows `lstat` fails if a directory path ends with an
+     '/' (or a '\', whatever) *)
+  Unix.lstat @@
+  if Sys.win32 && Utils.str_ends_with path Filename.dir_sep then
+    String.sub path 0 (String.length path - 1)
+  else
+    path
+
+external win_float_of_string: string -> float = "hh_float_of_string"
+
+let float_of_string =
+  if Sys.win32
+  then win_float_of_string
+  else float_of_string
