@@ -65,7 +65,7 @@ let close_connection sockaddr =
 let establish_connection ~timeout ~tmp_dir root =
   let sock_name = Socket.get_path (FlowConfig.socket_file ~tmp_dir root) in
   let sockaddr =
-    if Sys.win32 then
+    if Sys_utils.win32 then
       let ic = open_in_bin sock_name in
       let port = input_binary_int ic in
       close_in ic;

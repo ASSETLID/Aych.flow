@@ -1,4 +1,4 @@
-
+cross_compile_win32 = false
 have_lz4 = false
 debug = false
 (*

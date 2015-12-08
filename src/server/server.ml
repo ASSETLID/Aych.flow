@@ -249,7 +249,7 @@ struct
     write_file new_file new_content;
     let patch_file = Filename.temp_file "" "" in
     let diff_cmd =
-      if Sys.win32 then
+      if Sys_utils.win32 then
         spf "fc %s %s > %s"
           file new_file patch_file
       else

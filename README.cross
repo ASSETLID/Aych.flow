@@ -1,0 +1,31 @@
+
+## How to install OCaml cross-compilers for Windows with opam:
+    $ opam switch 4.01.0
+    $ opam repo add win https://github.com/vouillon/opam-windows-repository.git
+    $ opam install win64-ocaml
+    $ eval `opam config env`
+
+## Configuration
+    $ echo 'cross_compile_win32 = true' >> 00_config.ocp
+
+## Compilation
+
+### With Makefile
+
+Just run `build-flow-with-migw` rule from the root Makefile of Flow
+
+    $ make build-flow-with-mingw
+
+### Without Makefile
+
+First, you need to generate some stubs :
+
+    $ export OCAMLLIB=`ocamlc -where`
+    $ ocaml unix.cma scripts/gen_build_id.ml hack/utils/get_build_id.gen.c
+    $ ocaml unix.cma scripts/gen_index.ml flowlib.rc lib
+
+Then, you need to set `OCAMLLIB` to use the cross-compiler libraries:
+
+    $ export OCAMLLIB=`x86_64-w64-mingw32-ocamlc -where`
+    $ ocp-build init
+    $ ocp-build build flow

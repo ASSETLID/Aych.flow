@@ -35,7 +35,7 @@ let extract_win32_res tmpdir =
     true
 
 let extract_flowlib dir =
-  if Sys.win32 then
+  if Sys_utils.win32 then
     extract_win32_res dir
   else
     match get_embedded_flowlib_data (Sys_utils.executable_path ()) with

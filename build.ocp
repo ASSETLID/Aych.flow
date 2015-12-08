@@ -8,6 +8,19 @@
  *
  *)
 
+if ( cross_compile_win32 ) then {
+  ocamlc = "x86_64-w64-mingw32-ocamlc"
+  ocamlcc = "x86_64-w64-mingw32-ocamlc"
+  ocamlopt = "x86_64-w64-mingw32-ocamlopt"
+  os_type = "Win32"
+  windres = ["x86_64-w64-mingw32-windres"
+            "--preprocessor=x86_64-w64-mingw32-gcc" ]
+  flow_source = "./flowlib.rc"
+} else {
+  windres = [ "windres" "--preprocessor=x86_64-w64-mingw32-gcc" ]
+  flow_source = ".\flowlib.rc"
+}
+
 begin library "ROOTPROJECT"
   files = []
 end
@@ -34,15 +47,13 @@ begin library "flow-embedded"
     "src/embedded/flowlib.ml"
   ]
   if (os_type = "Win32") then {
-    flow_source = ".\flowlib.rc"
     flow_target = "%{flow-embedded_FULL_DST_DIR}%/flow_res.o"
     cclib = [ flow_target ]
     build_rules = [
       flow_target (
         sources = [ flow_source ]
         commands = [
-          { "windres"
-            "--preprocessor=x86_64-w64-mingw32-gcc.exe"
+          { windres
             "--preprocessor-arg=-E"
             "--preprocessor-arg=-xc-header"
             flow_source flow_target }

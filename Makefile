@@ -129,6 +129,13 @@ build-flow-with-ocp: build-flow-stubs-with-ocp
 	[ -d _obuild ] || ocp-build init
 	ocp-build build flow
 
+build-flow-with-mingw: build-flow-stubs-with-ocp
+	[ -d _obuild ] || ocp-build init
+	ocaml unix.cma scripts/gen_index.ml flowlib.rc lib
+	OCAMLLIB=`x86_64-w64-mingw32-ocamlc -where` ocp-build build flow
+	mkdir -p bin
+	cp _obuild/flow/flow.asm bin/flow.exe
+
 build-flow-debug: build-flow-native-deps $(FLOWLIB)
 	ocamlbuild -lflags -custom -no-links $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/flow.d.byte
 	mkdir -p bin
@@ -171,6 +178,7 @@ ifeq ($(OS), Linux)
 else
 	cp _obuild/flow/flow.asm bin/flow
 endif
+
 
 do-test:
 	./runtests.sh bin/flow
