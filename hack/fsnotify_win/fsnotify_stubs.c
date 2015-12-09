@@ -21,7 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <Windows.h>
+#include <windows.h>
 #include <assert.h>
 
 // Terrible guesstimate of ~1k files, highly unlikely,

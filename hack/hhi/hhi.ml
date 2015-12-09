@@ -15,8 +15,8 @@ external get_embedded_hhi_data : string -> string option =
 let root = ref None
 
 let touch_root r =
-  let r = Filename.quote (Path.to_string r) in
-  ignore (Unix.system ("find " ^ r ^ " -name '*.hhi' -exec touch '{}' ';'"))
+  let filter file = Filename.check_suffix file ".hhi" in
+  Find.iter_files ~filter [ r ] (Sys_utils.try_touch ~follow_symlinks:true)
 
 let touch () =
   match !root with
@@ -56,7 +56,7 @@ let extract_win32_res () =
     Some tmpdir
 
 let get_hhi_root_impl () =
-  if Sys.win32 then
+  if Sys_utils.win32 then
     extract_win32_res ()
   else
     match extract_embedded () with

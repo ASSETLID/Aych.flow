@@ -12,21 +12,23 @@ open Core
 
 external realpath: string -> string option = "hh_realpath"
 
+let win32 = Sys.os_type = "Win32"
+
 let getenv_user () =
-  let user_var = if Sys.win32 then "USERNAME" else "USER" in
+  let user_var = if win32 then "USERNAME" else "USER" in
   let logname_var = "LOGNAME" in
   try Some (Sys.getenv user_var) with Not_found ->
   try Some (Sys.getenv logname_var) with Not_found -> None
 
 let getenv_home () =
-  let home_var = if Sys.win32 then "APPDATA" else "HOME" in
+  let home_var = if win32 then "APPDATA" else "HOME" in
   try Some (Sys.getenv home_var) with Not_found -> None
 
 let getenv_term () =
   let term_var = "TERM" in (* This variable does not exist on windows. *)
   try Some (Sys.getenv term_var) with Not_found -> None
 
-let path_sep = if Sys.win32 then ";" else ":"
+let path_sep = if win32 then ";" else ":"
 
 let getenv_path () =
   let path_var = "PATH" in (* Same variable on windows *)
@@ -43,7 +45,7 @@ let open_in_bin_no_fail fn =
   try open_in_bin fn
   with e ->
     let e = Printexc.to_string e in
-    Printf.fprintf stderr "Could not open_in: '%s' (%s)\n" fn e;
+    Printf.fprintf stderr "Could not open_in_bin: '%s' (%s)\n" fn e;
     exit 3
 
 let close_in_no_fail fn ic =
@@ -57,6 +59,13 @@ let open_out_no_fail fn =
   with e ->
     let e = Printexc.to_string e in
     Printf.fprintf stderr "Could not open_out: '%s' (%s)\n" fn e;
+    exit 3
+
+let open_out_bin_no_fail fn =
+  try open_out_bin fn
+  with e ->
+    let e = Printexc.to_string e in
+    Printf.fprintf stderr "Could not open_out_bin: '%s' (%s)\n" fn e;
     exit 3
 
 let close_out_no_fail fn oc =
@@ -83,7 +92,7 @@ let cat_no_fail filename =
   close_in_no_fail filename ic;
   content
 
-let nl_regexp = Str.regexp "[\r\n]"
+let nl_regexp = Str.regexp "\r?\n"
 let split_lines = Str.split nl_regexp
 
 let exec_read cmd =
@@ -137,25 +146,7 @@ let with_umask umask f =
     ~exit:(fun () -> Unix.umask !old_umask)
     ~do_:f
 let with_umask umask f =
-  if Sys.win32 then f () else with_umask umask f
-
-let with_timeout timeout ~on_timeout ~do_ =
-  let old_handler = ref Sys.Signal_default in
-  let old_timeout = ref 0 in
-  Utils.with_context
-    ~enter:(fun () ->
-        old_handler := Sys.signal Sys.sigalrm (Sys.Signal_handle on_timeout);
-        old_timeout := Unix.alarm timeout)
-    ~exit:(fun () ->
-        ignore (Unix.alarm !old_timeout);
-        Sys.set_signal Sys.sigalrm !old_handler)
-    ~do_
-
-let with_timeout timeout ~on_timeout ~do_ =
-  if Sys.win32 then
-    do_ () (* TODO *)
-  else
-    with_timeout timeout ~on_timeout ~do_
+  if win32 then f () else with_umask umask f
 
 let read_stdin_to_string () =
   let buf = Buffer.create 4096 in
@@ -326,13 +317,17 @@ let symlink =
      on Windows since Vista, but until Seven (included), one should
      have administratrive rights in order to create symlink. *)
   let win32_symlink source dest = write_file ~file:dest source in
-  if Sys.win32 then win32_symlink else Unix.symlink
+  if win32 then win32_symlink else Unix.symlink
 
 let setsid =
   (* Not implemented on Windows. Let's just return the pid *)
-  if Sys.win32 then Unix.getpid else Unix.setsid
+  if win32 then Unix.getpid else Unix.setsid
 
-let set_signal = if not Sys.win32 then Sys.set_signal else (fun _ _ -> ())
+let set_signal = if not win32 then Sys.set_signal else (fun _ _ -> ())
+let signal =
+  if not win32
+  then (fun a b -> ignore (Sys.signal a b))
+  else (fun _ _ -> ())
 
 external get_total_ram : unit -> int = "hh_sysinfo_totalram"
 external uptime : unit -> int = "hh_sysinfo_uptime"
@@ -343,3 +338,28 @@ let nbr_procs = nproc ()
 
 external set_priorities : cpu_priority:int -> io_priority:int -> unit =
   "hh_set_priorities"
+
+external win_terminate_process: int -> bool = "win_terminate_process"
+
+let terminate_process pid =
+  try Unix.kill pid Sys.sigkill
+  with exn when win32 ->
+    (* Can be removed once support for ocaml-4.01 is dropped *)
+    if not (win_terminate_process pid) then
+      raise Unix.(Unix_error(ESRCH, "kill", ""))
+
+let lstat path =
+  (* WTF, on Windows `lstat` fails if a directory path ends with an
+     '/' (or a '\', whatever) *)
+  Unix.lstat @@
+  if win32 && Utils.str_ends_with path Filename.dir_sep then
+    String.sub path 0 (String.length path - 1)
+  else
+    path
+
+external win_float_of_string: string -> float = "hh_float_of_string"
+
+let float_of_string =
+  if win32
+  then win_float_of_string
+  else float_of_string

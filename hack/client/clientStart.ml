@@ -12,7 +12,7 @@ module CCS = ClientConnectSimple
 
 let get_hhserver () =
   let exe_name =
-    if Sys.win32 then "hh_server.exe" else "hh_server" in
+    if Sys_utils.win32 then "hh_server.exe" else "hh_server" in
   let server_next_to_client =
     Path.(to_string @@ concat (dirname executable_name) exe_name) in
   if Sys.file_exists server_next_to_client

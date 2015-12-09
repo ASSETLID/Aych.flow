@@ -18,9 +18,9 @@ let cat = Sys_utils.cat
 let compare = Pervasives.compare
 let dirname = Filename.dirname
 let expanduser = Sys_utils.expanduser
-let null_path = if Sys.win32 then "nul" else "/dev/null"
+let null_path = if Sys_utils.win32 then "nul" else "/dev/null"
 let temp_dir_name =
-  if Sys.win32 then Filename.get_temp_dir_name () else "/tmp"
+  if Sys_utils.win32 then Filename.get_temp_dir_name () else "/tmp"
 
 (**
  * Resolves a path (using realpath)

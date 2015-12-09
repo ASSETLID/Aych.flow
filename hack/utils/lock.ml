@@ -51,7 +51,7 @@ let _operations lock_file op : bool =
             with _ ->
               false
           in
-          if not (Sys.win32 || identical_file) then
+          if not (Sys_utils.win32 || identical_file) then
             (* Looks like someone (tmpwatch?) deleted the lock file; don't
              * create another one, because our socket is probably gone too.
              * We are dead in the water. *)
@@ -61,7 +61,7 @@ let _operations lock_file op : bool =
     in
     let _ =
       try Unix.lockf fd op 1
-      with _ when Sys.win32 && (op = Unix.F_TLOCK || op = Unix.F_TEST) ->
+      with _ when Sys_utils.win32 && (op = Unix.F_TLOCK || op = Unix.F_TEST) ->
           (* On Windows, F_TLOCK and F_TEST fail if we have the lock ourself *)
           (* However, we then are the only one to be able to write there. *)
           ignore (Unix.lseek fd 0 Unix.SEEK_SET : int);
